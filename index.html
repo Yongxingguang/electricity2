@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>峰谷电费计算器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+        }
+        body {
+            background-color: #f5f5f5;
+            padding: 20px;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        h1 {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus {
+            border-color: #409eff;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background-color: #409eff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #337ecc;
+        }
+        /* 汇总信息样式优化 */
+        .total-info {
+            margin-top: 15px;
+            padding: 12px;
+            background-color: #f0f8ff;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #333;
+            line-height: 1.8;
+        }
+        .total-info .highlight {
+            color: #e6a23c;
+            font-weight: bold;
+        }
+        .total-info .save {
+            color: #67c23a;
+            font-weight: bold;
+        }
+        .total-info .more {
+            color: #f56c6c;
+            font-weight: bold;
+        }
+        /* 结果表格样式调整（适配新增列） */
+        .result-header {
+            margin-top: 25px;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            font-weight: bold;
+            font-size: 13px;
+            color: #333;
+            overflow-x: auto;
+        }
+        .result-header div {
+            flex: 1;
+            min-width: 70px;
+            text-align: center;
+        }
+        .result-list {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 5px;
+        }
+        .result-item {
+            display: flex;
+            padding: 10px 0;
+            border-bottom: 1px solid #f5f5f5;
+            font-size: 13px;
+            color: #666;
+        }
+        .result-item div {
+            flex: 1;
+            min-width: 70px;
+            text-align: center;
+        }
+        .error {
+            color: #f56c6c;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+        /* 滚动条优化 */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #ddd;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>峰谷电费计算器</h1>
+        
+        <div class="input-group">
+            <label for="totalKwh">总用电量（度）</label>
+            <input type="number" id="totalKwh" placeholder="例如：100" min="0" step="0.1">
+            <div class="error" id="totalError">请输入有效的非负数</div>
+        </div>
+        
+        <div class="input-group">
+            <label for="peakPrice">峰时电价（元/度）</label>
+            <input type="number" id="peakPrice" placeholder="例如：0.5583" min="0" step="0.0001" value="0.5583">
+        </div>
+        
+        <div class="input-group">
+            <label for="valleyPrice">谷时电价（元/度）</label>
+            <input type="number" id="valleyPrice" placeholder="例如：0.3583" min="0" step="0.0001" value="0.3583">
+        </div>
+        
+        <div class="input-group">
+            <label for="normalPrice">普通电价（非峰谷，元/度）</label>
+            <input type="number" id="normalPrice" placeholder="例如：0.5283" min="0" step="0.0001" value="0.5283">
+        </div>
+        
+        <div class="input-group">
+            <label for="step">步长（度）</label>
+            <input type="number" id="step" placeholder="例如：10" min="1" step="1" value="10">
+        </div>
+        
+        <button onclick="calculateFee()">计算电费</button>
+        
+        <!-- 汇总信息（新增普通电价对比） -->
+        <div class="total-info" id="totalInfo" style="display: none;">
+            <div>总用电量：<span class="highlight" id="showTotalKwh">100</span>度</div>
+            <div>普通电价总费用：<span class="highlight" id="showNormalFee">52.83</span>元（平均：<span id="showNormalAvg">0.5283</span>元/度）</div>
+            <div id="compareTip">峰谷最优组合可<span class="save">节省2.00元</span>（纯谷时用电），最差组合多花<span class="more">3.00元</span>（纯峰时用电）</div>
+        </div>
+        
+        <!-- 结果表头（新增平均电价、对比差额列） -->
+        <div class="result-header" id="resultHeader" style="display: none;">
+            <div>峰时(度)</div>
+            <div>谷时(度)</div>
+            <div>峰谷总费(元)</div>
+            <div>平均电价(元/度)</div>
+            <div>与普通电价差额(元)</div>
+        </div>
+        
+        <!-- 结果列表（加滚动） -->
+        <div class="result-list" id="resultList"></div>
+    </div>
+
+    <script>
+        function calculateFee() {
+            // 获取输入值
+            const totalKwh = parseFloat(document.getElementById('totalKwh').value);
+            const peakPrice = parseFloat(document.getElementById('peakPrice').value);
+            const valleyPrice = parseFloat(document.getElementById('valleyPrice').value);
+            const normalPrice = parseFloat(document.getElementById('normalPrice').value);
+            const step = parseInt(document.getElementById('step').value);
+            
+            // 清空之前的结果和错误提示
+            document.getElementById('resultList').innerHTML = '';
+            document.getElementById('totalError').style.display = 'none';
+            document.getElementById('resultHeader').style.display = 'none';
+            document.getElementById('totalInfo').style.display = 'none';
+            
+            // 验证总用电量
+            if (isNaN(totalKwh) || totalKwh < 0) {
+                document.getElementById('totalError').style.display = 'block';
+                return;
+            }
+            
+            // 补全默认值
+            const peak = isNaN(peakPrice) ? 0.5583 : peakPrice;
+            const valley = isNaN(valleyPrice) ? 0.3583 : valleyPrice;
+            const normal = isNaN(normalPrice) ? 0.5283 : normalPrice;
+            const calcStep = isNaN(step) || step < 1 ? 10 : step;
+            
+            // 计算普通电价总费用和平均电价
+            const totalNormalFee = totalKwh * normal;
+            const normalAvgPrice = normal;
+            
+            // 存储所有峰谷组合的费用，用于计算最优/最差值
+            const feeList = [];
+            
+            // 显示总信息
+            document.getElementById('totalInfo').style.display = 'block';
+            document.getElementById('showTotalKwh').innerText = totalKwh.toFixed(1);
+            document.getElementById('showNormalFee').innerText = totalNormalFee.toFixed(2);
+            document.getElementById('showNormalAvg').innerText = normalAvgPrice.toFixed(4);
+            
+            // 显示结果表头
+            document.getElementById('resultHeader').style.display = 'flex';
+            
+            // 计算并显示所有组合
+            const resultList = document.getElementById('resultList');
+            let peakKwh = 0;
+            
+            // 遍历所有峰时用电量组合
+            while (peakKwh <= totalKwh) {
+                const valleyKwh = totalKwh - peakKwh;
+                // 峰谷总电费
+                const totalFee = (peakKwh * peak) + (valleyKwh * valley);
+                // 峰谷平均电价
+                const avgPrice = totalFee / totalKwh;
+                // 与普通电价的差额（峰谷总费 - 普通总费，负数=节省，正数=多花）
+                const diff = totalFee - totalNormalFee;
+                
+                // 存储费用用于后续对比
+                feeList.push({
+                    peakKwh,
+                    valleyKwh,
+                    totalFee,
+                    diff
+                });
+                
+                // 创建结果项
+                const item = document.createElement('div');
+                item.className = 'result-item';
+                // 差额显示样式：节省为绿色，多花为红色，持平为默认
+                const diffText = diff < 0 ? 
+                    `<span class="save">${diff.toFixed(2)}</span>` : 
+                    (diff > 0 ? `<span class="more">${diff.toFixed(2)}</span>` : diff.toFixed(2));
+                
+                item.innerHTML = `
+                    <div>${peakKwh.toFixed(1)}</div>
+                    <div>${valleyKwh.toFixed(1)}</div>
+                    <div>${totalFee.toFixed(2)}</div>
+                    <div>${avgPrice.toFixed(4)}</div>
+                    <div>${diffText}</div>
+                `;
+                resultList.appendChild(item);
+                
+                // 步长累加，最后一步处理边界值
+                if (peakKwh + calcStep > totalKwh && peakKwh !== totalKwh) {
+                    peakKwh = totalKwh;
+                } else {
+                    peakKwh += calcStep;
+                }
+            }
+            
+            // 计算最优（最省）和最差（最贵）组合，更新对比提示
+            if (feeList.length > 0) {
+                // 最省组合（diff最小）
+                const best = feeList.reduce((prev, curr) => prev.diff < curr.diff ? prev : curr);
+                // 最贵组合（diff最大）
+                const worst = feeList.reduce((prev, curr) => prev.diff > curr.diff ? prev : curr);
+                
+                const bestTip = best.diff < 0 ? 
+                    `节省${Math.abs(best.diff).toFixed(2)}元` : 
+                    (best.diff === 0 ? "持平" : `<span class="more">多花${best.diff.toFixed(2)}元</span>`);
+                
+                const worstTip = worst.diff > 0 ? 
+                    `多花${worst.diff.toFixed(2)}元` : 
+                    (worst.diff === 0 ? "持平" : `节省${Math.abs(worst.diff).toFixed(2)}元`);
+                
+                document.getElementById('compareTip').innerText = 
+                    `峰谷最优组合（峰${best.peakKwh.toFixed(1)}度/谷${best.valleyKwh.toFixed(1)}度）：${bestTip}；最差组合（峰${worst.peakKwh.toFixed(1)}度/谷${worst.valleyKwh.toFixed(1)}度）：${worstTip}`;
+            }
+        }
+        
+        // 输入框回车触发计算
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    calculateFee();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
